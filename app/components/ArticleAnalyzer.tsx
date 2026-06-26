@@ -25,13 +25,10 @@ const ACTION_BADGE_STYLES: Record<Action, string> = {
   telegram: "bg-emerald-50 text-emerald-700",
 };
 
-const PLACEHOLDER_RESULTS: Record<Action, string> = {
-  summary:
-    "Здесь появится краткое описание статьи: основная тема, ключевые идеи и выводы автора.",
-  theses:
-    "Здесь появятся тезисы статьи — структурированный список главных утверждений и аргументов.",
-  telegram:
-    "Здесь появится готовый пост для Telegram: цепляющий заголовок, суть материала и ссылка на источник.",
+type ParsedArticle = {
+  date: string | null;
+  title: string | null;
+  content: string | null;
 };
 
 function isValidUrl(value: string) {
@@ -65,10 +62,36 @@ export default function ArticleAnalyzer() {
     setIsLoading(true);
     setResult("");
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    try {
+      const response = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmedUrl }),
+      });
 
-    setResult(PLACEHOLDER_RESULTS[action]);
-    setIsLoading(false);
+      const data = (await response.json()) as ParsedArticle & { error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Не удалось распарсить статью");
+      }
+
+      const article: ParsedArticle = {
+        date: data.date,
+        title: data.title,
+        content: data.content,
+      };
+
+      setResult(JSON.stringify(article, null, 2));
+    } catch (parseError) {
+      setError(
+        parseError instanceof Error
+          ? parseError.message
+          : "Не удалось распарсить статью",
+      );
+      setResult("");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -139,9 +162,11 @@ export default function ArticleAnalyzer() {
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
           {isLoading ? (
-            <p className="animate-pulse text-slate-500">Генерация ответа...</p>
+            <p className="animate-pulse text-slate-500">Парсинг статьи...</p>
           ) : result ? (
-            <p className="whitespace-pre-wrap leading-7">{result}</p>
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-6">
+              {result}
+            </pre>
           ) : (
             <p className="text-slate-500">
               Результат появится здесь после выбора действия.
