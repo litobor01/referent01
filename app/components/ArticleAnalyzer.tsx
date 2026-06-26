@@ -10,6 +10,21 @@ const ACTION_LABELS: Record<Action, string> = {
   telegram: "Пост для Telegram",
 };
 
+const ACTION_STYLES: Record<Action, string> = {
+  summary:
+    "bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300 focus-visible:ring-sky-300",
+  theses:
+    "bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 focus-visible:ring-violet-300",
+  telegram:
+    "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 focus-visible:ring-emerald-300",
+};
+
+const ACTION_BADGE_STYLES: Record<Action, string> = {
+  summary: "bg-sky-50 text-sky-700",
+  theses: "bg-violet-50 text-violet-700",
+  telegram: "bg-emerald-50 text-emerald-700",
+};
+
 const PLACEHOLDER_RESULTS: Record<Action, string> = {
   summary:
     "Здесь появится краткое описание статьи: основная тема, ключевые идеи и выводы автора.",
@@ -102,7 +117,7 @@ export default function ArticleAnalyzer() {
               type="button"
               disabled={!urlIsValid || isLoading}
               onClick={() => void handleAction(action)}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed ${ACTION_STYLES[action]}`}
             >
               {ACTION_LABELS[action]}
             </button>
@@ -114,7 +129,9 @@ export default function ArticleAnalyzer() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-medium text-slate-900">Результат</h2>
           {activeAction ? (
-            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${ACTION_BADGE_STYLES[activeAction]}`}
+            >
               {ACTION_LABELS[activeAction]}
             </span>
           ) : null}
