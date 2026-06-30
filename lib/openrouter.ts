@@ -1,6 +1,6 @@
 import { AppError, ERROR_CODES } from "@/lib/errors";
 
-type ChatMessage = {
+export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
@@ -20,7 +20,7 @@ function getOpenRouterConfig() {
   return { apiKey, baseUrl };
 }
 
-export async function chatCompletion(messages: ChatMessage[]) {
+export async function chatCompletionStream(messages: ChatMessage[]) {
   const { apiKey, baseUrl } = getOpenRouterConfig();
 
   let response: Response;
@@ -36,26 +36,87 @@ export async function chatCompletion(messages: ChatMessage[]) {
         model: DEEPSEEK_MODEL,
         messages,
         temperature: 0.3,
+        stream: true,
       }),
-      signal: AbortSignal.timeout(120000),
     });
   } catch {
     throw new AppError(ERROR_CODES.AI_FAILED);
   }
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new AppError(ERROR_CODES.AI_FAILED);
   }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
+  return response.body;
+}
 
-  const content = data.choices?.[0]?.message?.content?.trim();
+export async function* readOpenRouterDeltaStream(
+  body: ReadableStream<Uint8Array>,
+) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
 
-  if (!content) {
-    throw new AppError(ERROR_CODES.AI_FAILED);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (!trimmed.startsWith("data: ")) {
+          continue;
+        }
+
+        const payload = trimmed.slice(6);
+
+        if (payload === "[DONE]") {
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(payload) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+          };
+          const content = parsed.choices?.[0]?.delta?.content;
+
+          if (content) {
+            yield content;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
+}
 
-  return content;
+export function createTextDeltaStream(
+  upstream: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of readOpenRouterDeltaStream(upstream)) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+
+        controller.close();
+      } catch {
+        controller.error(new AppError(ERROR_CODES.AI_FAILED));
+      }
+    },
+  });
 }

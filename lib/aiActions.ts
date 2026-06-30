@@ -1,6 +1,10 @@
 import type { ParsedArticle } from "@/lib/parseArticle";
 import { AppError, ERROR_CODES } from "@/lib/errors";
-import { chatCompletion } from "@/lib/openrouter";
+import {
+  chatCompletionStream,
+  createTextDeltaStream,
+  type ChatMessage,
+} from "@/lib/openrouter";
 
 export type AiAction = "summary" | "theses" | "telegram";
 
@@ -96,17 +100,28 @@ ${articleBlock}`;
   }
 }
 
-export async function runAiAction(
+export function getAiActionMessages(
   action: AiAction,
   article: ParsedArticle,
   sourceUrl: string,
-) {
+): ChatMessage[] {
   if (!article.content?.trim()) {
     throw new AppError(ERROR_CODES.ARTICLE_CONTENT_EMPTY);
   }
 
-  return chatCompletion([
+  return [
     { role: "system", content: SYSTEM_PROMPTS[action] },
     { role: "user", content: buildUserPrompt(action, article, sourceUrl) },
-  ]);
+  ];
+}
+
+export async function runAiActionStream(
+  action: AiAction,
+  article: ParsedArticle,
+  sourceUrl: string,
+) {
+  const messages = getAiActionMessages(action, article, sourceUrl);
+  const upstream = await chatCompletionStream(messages);
+
+  return createTextDeltaStream(upstream);
 }

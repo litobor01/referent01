@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 
 import { parseArticleFromUrl, type ParsedArticle } from "@/lib/parseArticle";
 import { createErrorResponse, ERROR_CODES } from "@/lib/errors";
-import {
-  isProcessAction,
-  processArticle,
-} from "@/lib/processAction";
+import { isProcessAction, processArticleStream } from "@/lib/processAction";
 import { validateArticleUrl } from "@/lib/validateUrl";
 
 export async function POST(request: Request) {
@@ -44,12 +41,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const { result } = await processArticle(action, article, sourceUrl);
+    const stream = await processArticleStream(action, article, sourceUrl);
 
-    return NextResponse.json({
-      action,
-      result,
-      article,
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
     });
   } catch (error) {
     const { status, body } = createErrorResponse(error);

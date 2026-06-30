@@ -2,14 +2,14 @@ $ErrorActionPreference = "Stop"
 $baseUrl = "http://localhost:3000"
 $articleUrl = "https://en.wikipedia.org/wiki/Artificial_intelligence"
 
-function Invoke-Api {
+function Invoke-ProcessStream {
   param(
-    [string]$Path,
     [object]$Body
   )
 
   $json = $Body | ConvertTo-Json -Depth 6
-  return Invoke-RestMethod -Uri "$baseUrl$Path" -Method POST -Body $json -ContentType "application/json" -TimeoutSec 180
+  $response = Invoke-WebRequest -Uri "$baseUrl/api/process" -Method POST -Body $json -ContentType "application/json" -TimeoutSec 180
+  return $response.Content
 }
 
 Write-Host "Step 6: API verification"
@@ -21,7 +21,7 @@ Write-Host "OK: GET / -> 200"
 
 Write-Host "[2/7] Error: empty URL..."
 try {
-  Invoke-Api -Path "/api/process" -Body @{ url = ""; action = "summary" }
+  Invoke-WebRequest -Uri "$baseUrl/api/process" -Method POST -Body (@{ url = ""; action = "summary" } | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 30 | Out-Null
   throw "Expected error for empty URL"
 } catch {
   Write-Host "OK: empty URL rejected"
@@ -29,39 +29,39 @@ try {
 
 Write-Host "[3/7] Error: invalid URL..."
 try {
-  Invoke-Api -Path "/api/process" -Body @{ url = "not-a-url"; action = "summary" }
+  Invoke-WebRequest -Uri "$baseUrl/api/process" -Method POST -Body (@{ url = "not-a-url"; action = "summary" } | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 30 | Out-Null
   throw "Expected error for invalid URL"
 } catch {
   Write-Host "OK: invalid URL rejected"
 }
 
 Write-Host "[4/7] Parse article..."
-$parsed = Invoke-Api -Path "/api/parse" -Body @{ url = $articleUrl }
+$parsed = Invoke-RestMethod -Uri "$baseUrl/api/parse" -Method POST -Body (@{ url = $articleUrl } | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 60
 if (-not $parsed.title -or -not $parsed.content) { throw "Parse did not return title/content" }
 Write-Host "OK: parse -> title length=$($parsed.title.Length), content=$($parsed.content.Length) chars"
 
 Write-Host "[5/7] Summary..."
-$summary = Invoke-Api -Path "/api/process" -Body @{ url = $articleUrl; action = "summary" }
-if (-not $summary.result) { throw "summary returned empty result" }
-Write-Host "OK: summary length=$($summary.result.Length)"
+$summary = Invoke-ProcessStream -Body @{ url = $articleUrl; action = "summary" }
+if (-not $summary) { throw "summary returned empty result" }
+Write-Host "OK: summary length=$($summary.Length)"
 
 Write-Host "[6/7] Theses with cached article..."
-$theses = Invoke-Api -Path "/api/process" -Body @{
+$theses = Invoke-ProcessStream -Body @{
   url = $articleUrl
   action = "theses"
-  article = $summary.article
+  article = $parsed
 }
-if ($theses.result -notmatch "1\.|^- ") { throw "theses does not look like a list" }
-Write-Host "OK: theses length=$($theses.result.Length)"
+if ($theses -notmatch "1\.|^- ") { throw "theses does not look like a list" }
+Write-Host "OK: theses length=$($theses.Length)"
 
 Write-Host "[7/7] Telegram post with cached article..."
-$telegram = Invoke-Api -Path "/api/process" -Body @{
+$telegram = Invoke-ProcessStream -Body @{
   url = $articleUrl
   action = "telegram"
-  article = $summary.article
+  article = $parsed
 }
-if ($telegram.result -notmatch $articleUrl) { throw "telegram does not contain source URL" }
-Write-Host "OK: telegram length=$($telegram.result.Length)"
+if ($telegram -notmatch $articleUrl) { throw "telegram does not contain source URL" }
+Write-Host "OK: telegram length=$($telegram.Length)"
 
 Write-Host ""
 Write-Host "All step 6 checks passed."

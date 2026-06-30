@@ -1,4 +1,4 @@
-import { runAiAction, type AiAction } from "@/lib/aiActions";
+import { runAiActionStream, type AiAction } from "@/lib/aiActions";
 import { ERROR_CODES } from "@/lib/errors";
 import type { ParsedArticle } from "@/lib/parseArticle";
 
@@ -14,12 +14,10 @@ export function getProcessActionError() {
   return ERROR_CODES.ACTION_INVALID;
 }
 
-export async function processArticle(
+export async function processArticleStream(
   action: ProcessAction,
   article: ParsedArticle,
   sourceUrl: string,
 ) {
-  const result = await runAiAction(action, article, sourceUrl);
-
-  return { result };
+  return runAiActionStream(action, article, sourceUrl);
 }

@@ -54,6 +54,39 @@ const PROCESS_LABELS: Record<Action, string> = {
   telegram: "Готовлю пост для Telegram…",
 };
 
+const COPY_IN_PROGRESS_HINT =
+  "Генерация ещё не завершена. Подождите немного.";
+
+async function readTextStream(
+  response: Response,
+  onUpdate: (text: string) => void,
+) {
+  const reader = response.body?.getReader();
+
+  if (!reader) {
+    throw new Error(ERROR_CODES.AI_FAILED);
+  }
+
+  const decoder = new TextDecoder();
+  let result = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    result += decoder.decode(value, { stream: true });
+    onUpdate(result);
+  }
+
+  result += decoder.decode();
+  onUpdate(result);
+
+  return result;
+}
+
 async function readApiError(response: Response) {
   try {
     const data = (await response.json()) as ApiErrorResponse;
@@ -69,6 +102,8 @@ export default function ArticleAnalyzer() {
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isGenerationComplete, setIsGenerationComplete] = useState(false);
   const [processStatus, setProcessStatus] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<ErrorCode | null>(null);
   const [copyLabel, setCopyLabel] = useState("Копировать");
@@ -84,14 +119,24 @@ export default function ArticleAnalyzer() {
     setActiveAction(null);
     setResult("");
     setIsLoading(false);
+    setIsStreaming(false);
+    setIsGenerationComplete(false);
     setProcessStatus(null);
     setErrorCode(null);
     setCopyLabel("Копировать");
+    setIsStreaming(false);
+    setIsGenerationComplete(false);
     setParsedCache(null);
   }
 
   async function handleCopy() {
     if (!result) {
+      return;
+    }
+
+    if (!isGenerationComplete) {
+      setCopyLabel(COPY_IN_PROGRESS_HINT);
+      window.setTimeout(() => setCopyLabel("Копировать"), 2500);
       return;
     }
 
@@ -138,7 +183,10 @@ export default function ArticleAnalyzer() {
     setErrorCode(null);
     setActiveAction(action);
     setIsLoading(true);
+    setIsStreaming(false);
+    setIsGenerationComplete(false);
     setResult("");
+    setCopyLabel("Копировать");
 
     const cachedArticle =
       parsedCache?.url === trimmedUrl ? parsedCache.article : undefined;
@@ -192,27 +240,36 @@ export default function ArticleAnalyzer() {
         return;
       }
 
+      const contentType = response.headers.get("content-type") ?? "";
+
       if (!response.ok) {
-        setErrorCode(await readApiError(response));
+        if (contentType.includes("application/json")) {
+          setErrorCode(await readApiError(response));
+        } else {
+          setErrorCode(ERROR_CODES.AI_FAILED);
+        }
         return;
       }
 
-      const data = (await response.json()) as {
-        result?: string;
-        article?: ParsedArticle;
-      };
+      setProcessStatus(null);
+      setIsStreaming(true);
+      scrollToResult();
 
-      if (data.article) {
-        setParsedCache({ url: trimmedUrl, article: data.article });
+      const streamedResult = await readTextStream(response, setResult);
+
+      if (!streamedResult.trim()) {
+        setErrorCode(ERROR_CODES.AI_FAILED);
+        setResult("");
+        return;
       }
 
-      setResult(data.result ?? "");
-
-      if (data.result) {
-        scrollToResult();
-      }
+      setIsGenerationComplete(true);
+    } catch {
+      setErrorCode(ERROR_CODES.AI_FAILED);
+      setResult("");
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
       setProcessStatus(null);
     }
   }
@@ -305,11 +362,20 @@ export default function ArticleAnalyzer() {
                 {ACTION_LABELS[activeAction]}
               </span>
             ) : null}
-            {result ? (
+            {result || isStreaming ? (
               <button
                 type="button"
+                title={
+                  isGenerationComplete
+                    ? "Скопировать результат"
+                    : COPY_IN_PROGRESS_HINT
+                }
                 onClick={() => void handleCopy()}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:outline-none"
+                className={`rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium transition focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:outline-none ${
+                  isGenerationComplete
+                    ? "text-slate-700 hover:bg-slate-50"
+                    : "cursor-not-allowed text-slate-500 opacity-70"
+                }`}
               >
                 {copyLabel}
               </button>
@@ -318,9 +384,12 @@ export default function ArticleAnalyzer() {
         </div>
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
-          {result ? (
+          {result || isStreaming ? (
             <p className="text-sm leading-7 break-words whitespace-pre-wrap text-slate-700 [overflow-wrap:anywhere]">
               {result}
+              {isStreaming ? (
+                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-sky-500 align-middle" />
+              ) : null}
             </p>
           ) : (
             <p className="text-sm text-slate-500 sm:text-base">
