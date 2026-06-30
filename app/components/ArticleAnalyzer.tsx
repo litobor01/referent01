@@ -39,6 +39,9 @@ const ACTION_STYLES: Record<Action, string> = {
     "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 focus-visible:ring-emerald-300",
 };
 
+const BUTTON_BASE_CLASS =
+  "w-full rounded-xl px-4 py-3 text-sm font-medium transition focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed md:w-auto md:py-2.5";
+
 const ACTION_BADGE_STYLES: Record<Action, string> = {
   summary: "bg-sky-50 text-sky-700",
   theses: "bg-violet-50 text-violet-700",
@@ -220,15 +223,15 @@ export default function ArticleAnalyzer() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6 md:gap-8">
       <header className="space-y-2">
-        <p className="text-sm font-medium tracking-wide text-sky-600 uppercase">
+        <p className="text-xs font-medium tracking-wide text-sky-600 uppercase sm:text-sm">
           referent01
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
           Анализ англоязычных статей
         </h1>
-        <p className="text-slate-600">
+        <p className="text-sm text-slate-600 sm:text-base">
           Вставьте ссылку на статью, выберите действие — результат появится ниже.
         </p>
       </header>
@@ -243,7 +246,7 @@ export default function ArticleAnalyzer() {
             value={url}
             onChange={(event) => handleUrlChange(event.target.value)}
             placeholder="Введите URL статьи, например: https://example.com/article"
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+            className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200 sm:text-sm"
           />
           <span className="block text-xs text-slate-500">
             Укажите ссылку на англоязычную статью
@@ -251,14 +254,14 @@ export default function ArticleAnalyzer() {
         </label>
 
         {errorCode ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="break-words">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Не получилось выполнить действие</AlertTitle>
             <AlertDescription>{getErrorMessage(errorCode)}</AlertDescription>
           </Alert>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
           {(Object.keys(ACTION_LABELS) as Action[]).map((action) => (
             <button
               key={action}
@@ -266,7 +269,7 @@ export default function ArticleAnalyzer() {
               title={ACTION_TITLES[action]}
               disabled={!urlIsFilled || isLoading}
               onClick={() => void handleAction(action)}
-              className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed ${ACTION_STYLES[action]}`}
+              className={`${BUTTON_BASE_CLASS} text-white ${ACTION_STYLES[action]}`}
             >
               {ACTION_LABELS[action]}
             </button>
@@ -275,7 +278,7 @@ export default function ArticleAnalyzer() {
             type="button"
             disabled={isLoading}
             onClick={handleClear}
-            className="rounded-xl border border-red-300 bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-red-300"
+            className={`${BUTTON_BASE_CLASS} border border-red-300 bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-300 disabled:bg-red-300`}
           >
             Очистить
           </button>
@@ -283,16 +286,16 @@ export default function ArticleAnalyzer() {
       </form>
 
       {isLoading && processStatus ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm break-words text-sky-800">
           <p className="animate-pulse">{processStatus}</p>
         </div>
       ) : null}
 
       <section
         ref={resultSectionRef}
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"
       >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-medium text-slate-900">Результат</h2>
           <div className="flex flex-wrap items-center gap-2">
             {activeAction ? (
@@ -316,11 +319,11 @@ export default function ArticleAnalyzer() {
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
           {result ? (
-            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+            <p className="text-sm leading-7 break-words whitespace-pre-wrap text-slate-700 [overflow-wrap:anywhere]">
               {result}
             </p>
           ) : (
-            <p className="text-slate-500">
+            <p className="text-sm text-slate-500 sm:text-base">
               Результат появится здесь после выбора действия.
             </p>
           )}
