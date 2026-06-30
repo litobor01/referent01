@@ -13,6 +13,12 @@ const ACTION_LABELS: Record<Action, string> = {
   telegram: "Пост для Telegram",
 };
 
+const ACTION_TITLES: Record<Action, string> = {
+  summary: "Кратко рассказать, о чём статья и какой у неё вывод",
+  theses: "Выделить ключевые тезисы статьи списком",
+  telegram: "Подготовить короткий пост для публикации в Telegram",
+};
+
 const ACTION_STYLES: Record<Action, string> = {
   summary:
     "bg-sky-600 hover:bg-sky-700 disabled:bg-sky-300 focus-visible:ring-sky-300",
@@ -28,10 +34,10 @@ const ACTION_BADGE_STYLES: Record<Action, string> = {
   telegram: "bg-emerald-50 text-emerald-700",
 };
 
-const LOADING_LABELS: Record<Action, string> = {
-  summary: "Анализ статьи...",
-  theses: "Формирование тезисов...",
-  telegram: "Подготовка поста...",
+const PROCESS_LABELS: Record<Action, string> = {
+  summary: "Анализирую статью…",
+  theses: "Формирую тезисы…",
+  telegram: "Готовлю пост для Telegram…",
 };
 
 const ERROR_LABELS: Record<Action, string> = {
@@ -45,6 +51,7 @@ export default function ArticleAnalyzer() {
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [processStatus, setProcessStatus] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [parsedCache, setParsedCache] = useState<{
     url: string;
@@ -77,14 +84,41 @@ export default function ArticleAnalyzer() {
     const cachedArticle =
       parsedCache?.url === trimmedUrl ? parsedCache.article : undefined;
 
+    setProcessStatus(
+      cachedArticle ? PROCESS_LABELS[action] : "Загружаю статью…",
+    );
+
+    let article = cachedArticle;
+
     try {
+      if (!article) {
+        const parseResponse = await fetch("/api/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: trimmedUrl }),
+        });
+
+        const parseData = (await parseResponse.json()) as ParsedArticle & {
+          error?: string;
+        };
+
+        if (!parseResponse.ok) {
+          throw new Error(parseData.error ?? "Не удалось загрузить статью");
+        }
+
+        article = parseData;
+        setParsedCache({ url: trimmedUrl, article });
+      }
+
+      setProcessStatus(PROCESS_LABELS[action]);
+
       const response = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: trimmedUrl,
           action,
-          article: cachedArticle,
+          article,
         }),
       });
 
@@ -112,6 +146,7 @@ export default function ArticleAnalyzer() {
       setResult("");
     } finally {
       setIsLoading(false);
+      setProcessStatus(null);
     }
   }
 
@@ -143,9 +178,12 @@ export default function ArticleAnalyzer() {
             type="url"
             value={url}
             onChange={(event) => handleUrlChange(event.target.value)}
-            placeholder="https://example.com/article"
+            placeholder="Введите URL статьи, например: https://example.com/article"
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
           />
+          <span className="block text-xs text-slate-500">
+            Укажите ссылку на англоязычную статью
+          </span>
         </label>
 
         {error ? (
@@ -159,6 +197,7 @@ export default function ArticleAnalyzer() {
             <button
               key={action}
               type="button"
+              title={ACTION_TITLES[action]}
               disabled={!urlIsValid || isLoading}
               onClick={() => void handleAction(action)}
               className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed ${ACTION_STYLES[action]}`}
@@ -168,6 +207,12 @@ export default function ArticleAnalyzer() {
           ))}
         </div>
       </form>
+
+      {isLoading && processStatus ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          <p className="animate-pulse">{processStatus}</p>
+        </div>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -182,11 +227,7 @@ export default function ArticleAnalyzer() {
         </div>
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
-          {isLoading ? (
-            <p className="animate-pulse text-slate-500">
-              {activeAction ? LOADING_LABELS[activeAction] : "Загрузка..."}
-            </p>
-          ) : result ? (
+          {result ? (
             <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
               {result}
             </p>
