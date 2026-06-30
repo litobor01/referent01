@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -61,18 +61,54 @@ async function readApiError(response: Response) {
 }
 
 export default function ArticleAnalyzer() {
+  const resultSectionRef = useRef<HTMLElement>(null);
   const [url, setUrl] = useState("");
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [processStatus, setProcessStatus] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<ErrorCode | null>(null);
+  const [copyLabel, setCopyLabel] = useState("Копировать");
   const [parsedCache, setParsedCache] = useState<{
     url: string;
     article: ParsedArticle;
   } | null>(null);
 
   const urlIsFilled = url.trim().length > 0;
+
+  function handleClear() {
+    setUrl("");
+    setActiveAction(null);
+    setResult("");
+    setIsLoading(false);
+    setProcessStatus(null);
+    setErrorCode(null);
+    setCopyLabel("Копировать");
+    setParsedCache(null);
+  }
+
+  async function handleCopy() {
+    if (!result) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(result);
+      setCopyLabel("Скопировано");
+      window.setTimeout(() => setCopyLabel("Копировать"), 2000);
+    } catch {
+      setErrorCode(ERROR_CODES.UNKNOWN);
+    }
+  }
+
+  function scrollToResult() {
+    window.requestAnimationFrame(() => {
+      resultSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 
   function handleUrlChange(value: string) {
     setUrl(value);
@@ -168,6 +204,10 @@ export default function ArticleAnalyzer() {
       }
 
       setResult(data.result ?? "");
+
+      if (data.result) {
+        scrollToResult();
+      }
     } finally {
       setIsLoading(false);
       setProcessStatus(null);
@@ -218,7 +258,7 @@ export default function ArticleAnalyzer() {
           </Alert>
         ) : null}
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {(Object.keys(ACTION_LABELS) as Action[]).map((action) => (
             <button
               key={action}
@@ -231,6 +271,14 @@ export default function ArticleAnalyzer() {
               {ACTION_LABELS[action]}
             </button>
           ))}
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={handleClear}
+            className="rounded-xl border border-red-300 bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-red-300"
+          >
+            Очистить
+          </button>
         </div>
       </form>
 
@@ -240,16 +288,30 @@ export default function ArticleAnalyzer() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <section
+        ref={resultSectionRef}
+        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-medium text-slate-900">Результат</h2>
-          {activeAction ? (
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${ACTION_BADGE_STYLES[activeAction]}`}
-            >
-              {ACTION_LABELS[activeAction]}
-            </span>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {activeAction ? (
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-medium ${ACTION_BADGE_STYLES[activeAction]}`}
+              >
+                {ACTION_LABELS[activeAction]}
+              </span>
+            ) : null}
+            {result ? (
+              <button
+                type="button"
+                onClick={() => void handleCopy()}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:outline-none"
+              >
+                {copyLabel}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
