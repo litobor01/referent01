@@ -5,13 +5,12 @@ import { FormEvent, useState } from "react";
 import type { ParsedArticle } from "@/lib/parseArticle";
 import { isValidArticleUrl } from "@/lib/validateUrl";
 
-type Action = "summary" | "theses" | "telegram" | "translate";
+type Action = "summary" | "theses" | "telegram";
 
 const ACTION_LABELS: Record<Action, string> = {
   summary: "О чем статья?",
   theses: "Тезисы",
   telegram: "Пост для Telegram",
-  translate: "Перевод",
 };
 
 const ACTION_STYLES: Record<Action, string> = {
@@ -21,29 +20,24 @@ const ACTION_STYLES: Record<Action, string> = {
     "bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 focus-visible:ring-violet-300",
   telegram:
     "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 focus-visible:ring-emerald-300",
-  translate:
-    "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 focus-visible:ring-amber-300",
 };
 
 const ACTION_BADGE_STYLES: Record<Action, string> = {
   summary: "bg-sky-50 text-sky-700",
   theses: "bg-violet-50 text-violet-700",
   telegram: "bg-emerald-50 text-emerald-700",
-  translate: "bg-amber-50 text-amber-700",
 };
 
 const LOADING_LABELS: Record<Action, string> = {
   summary: "Анализ статьи...",
   theses: "Формирование тезисов...",
   telegram: "Подготовка поста...",
-  translate: "Перевод статьи...",
 };
 
 const ERROR_LABELS: Record<Action, string> = {
   summary: "Не удалось проанализировать статью",
   theses: "Не удалось сформировать тезисы",
   telegram: "Не удалось подготовить пост",
-  translate: "Не удалось перевести статью",
 };
 
 export default function ArticleAnalyzer() {
