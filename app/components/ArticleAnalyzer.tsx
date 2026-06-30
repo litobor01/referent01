@@ -30,16 +30,17 @@ const ACTION_BADGE_STYLES: Record<Action, string> = {
 };
 
 const LOADING_LABELS: Record<Action, string> = {
-  summary: "Парсинг статьи...",
-  theses: "Парсинг статьи...",
-  telegram: "Парсинг статьи...",
+  summary: "Анализ статьи...",
+  theses: "Формирование тезисов...",
+  telegram: "Подготовка поста...",
   translate: "Перевод статьи...",
 };
 
-type ParsedArticle = {
-  date: string | null;
-  title: string | null;
-  content: string | null;
+const ERROR_LABELS: Record<Action, string> = {
+  summary: "Не удалось проанализировать статью",
+  theses: "Не удалось сформировать тезисы",
+  telegram: "Не удалось подготовить пост",
+  translate: "Не удалось перевести статью",
 };
 
 function isValidUrl(value: string) {
@@ -74,45 +75,47 @@ export default function ArticleAnalyzer() {
     setResult("");
 
     try {
-      const endpoint = action === "translate" ? "/api/translate" : "/api/parse";
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmedUrl }),
-      });
-
-      const data = (await response.json()) as ParsedArticle & {
-        error?: string;
-        formatted?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ??
-            (action === "translate"
-              ? "Не удалось перевести статью"
-              : "Не удалось распарсить статью"),
-        );
-      }
-
       if (action === "translate") {
+        const response = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: trimmedUrl }),
+        });
+
+        const data = (await response.json()) as {
+          error?: string;
+          formatted?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? ERROR_LABELS.translate);
+        }
+
         setResult(data.formatted ?? "");
         return;
       }
 
-      const article: ParsedArticle = {
-        date: data.date,
-        title: data.title,
-        content: data.content,
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmedUrl, action }),
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        result?: string;
       };
 
-      setResult(JSON.stringify(article, null, 2));
-    } catch (parseError) {
+      if (!response.ok) {
+        throw new Error(data.error ?? ERROR_LABELS[action]);
+      }
+
+      setResult(data.result ?? "");
+    } catch (actionError) {
       setError(
-        parseError instanceof Error
-          ? parseError.message
-          : "Не удалось распарсить статью",
+        actionError instanceof Error
+          ? actionError.message
+          : ERROR_LABELS[action],
       );
       setResult("");
     } finally {
@@ -192,9 +195,9 @@ export default function ArticleAnalyzer() {
               {activeAction ? LOADING_LABELS[activeAction] : "Загрузка..."}
             </p>
           ) : result ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap text-sm leading-7 text-slate-700">
+            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
               {result}
-            </pre>
+            </p>
           ) : (
             <p className="text-slate-500">
               Результат появится здесь после выбора действия.
