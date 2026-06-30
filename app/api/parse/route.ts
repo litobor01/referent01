@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { parseArticleFromUrl } from "@/lib/parseArticle";
+import { createErrorResponse } from "@/lib/errors";
 import { validateArticleUrl } from "@/lib/validateUrl";
 
 export async function POST(request: Request) {
@@ -9,16 +10,18 @@ export async function POST(request: Request) {
     const validation = validateArticleUrl(body.url ?? "");
 
     if (!validation.ok) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return NextResponse.json(
+        { code: validation.code },
+        { status: 400 },
+      );
     }
 
     const article = await parseArticleFromUrl(validation.url.toString());
 
     return NextResponse.json(article);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Не удалось распарсить статью";
+    const { status, body } = createErrorResponse(error);
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(body, { status });
   }
 }

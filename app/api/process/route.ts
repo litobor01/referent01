@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { parseArticleFromUrl, type ParsedArticle } from "@/lib/parseArticle";
+import { createErrorResponse, ERROR_CODES } from "@/lib/errors";
 import {
-  getProcessActionError,
   isProcessAction,
   processArticle,
 } from "@/lib/processAction";
@@ -19,14 +19,17 @@ export async function POST(request: Request) {
     const validation = validateArticleUrl(body.url ?? "");
 
     if (!validation.ok) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return NextResponse.json(
+        { code: validation.code },
+        { status: 400 },
+      );
     }
 
     const action = body.action?.trim();
 
     if (!action || !isProcessAction(action)) {
       return NextResponse.json(
-        { error: getProcessActionError() },
+        { code: ERROR_CODES.ACTION_INVALID },
         { status: 400 },
       );
     }
@@ -36,7 +39,7 @@ export async function POST(request: Request) {
 
     if (!article.content?.trim()) {
       return NextResponse.json(
-        { error: "Не найден текст статьи для обработки" },
+        { code: ERROR_CODES.ARTICLE_CONTENT_EMPTY },
         { status: 400 },
       );
     }
@@ -49,9 +52,8 @@ export async function POST(request: Request) {
       article,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Не удалось обработать статью";
+    const { status, body } = createErrorResponse(error);
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(body, { status });
   }
 }

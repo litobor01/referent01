@@ -1,4 +1,5 @@
 import { runAiAction, type AiAction } from "@/lib/aiActions";
+import { ERROR_CODES } from "@/lib/errors";
 import type { ParsedArticle } from "@/lib/parseArticle";
 
 export type ProcessAction = AiAction;
@@ -10,7 +11,7 @@ export function isProcessAction(value: string): value is ProcessAction {
 }
 
 export function getProcessActionError() {
-  return "Укажите действие: summary, theses или telegram";
+  return ERROR_CODES.ACTION_INVALID;
 }
 
 export async function processArticle(

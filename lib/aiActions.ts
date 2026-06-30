@@ -1,4 +1,5 @@
 import type { ParsedArticle } from "@/lib/parseArticle";
+import { AppError, ERROR_CODES } from "@/lib/errors";
 import { chatCompletion } from "@/lib/openrouter";
 
 export type AiAction = "summary" | "theses" | "telegram";
@@ -101,7 +102,7 @@ export async function runAiAction(
   sourceUrl: string,
 ) {
   if (!article.content?.trim()) {
-    throw new Error("Не найден текст статьи для анализа");
+    throw new AppError(ERROR_CODES.ARTICLE_CONTENT_EMPTY);
   }
 
   return chatCompletion([

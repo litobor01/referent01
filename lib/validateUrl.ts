@@ -1,27 +1,26 @@
+import { ERROR_CODES, type ErrorCode } from "@/lib/errors";
+
 export type UrlValidationResult =
   | { ok: true; url: URL }
-  | { ok: false; error: string };
+  | { ok: false; code: ErrorCode };
 
 export function validateArticleUrl(input: string): UrlValidationResult {
   const trimmed = input.trim();
 
   if (!trimmed) {
-    return { ok: false, error: "URL обязателен" };
+    return { ok: false, code: ERROR_CODES.URL_REQUIRED };
   }
 
   try {
     const url = new URL(trimmed);
 
     if (!["http:", "https:"].includes(url.protocol)) {
-      return {
-        ok: false,
-        error: "Поддерживаются только http:// и https://",
-      };
+      return { ok: false, code: ERROR_CODES.URL_PROTOCOL_INVALID };
     }
 
     return { ok: true, url };
   } catch {
-    return { ok: false, error: "Некорректный URL" };
+    return { ok: false, code: ERROR_CODES.URL_INVALID };
   }
 }
 

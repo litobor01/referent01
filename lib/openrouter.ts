@@ -1,3 +1,5 @@
+import { AppError, ERROR_CODES } from "@/lib/errors";
+
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -12,7 +14,7 @@ function getOpenRouterConfig() {
     "https://openrouter.ai/api/v1";
 
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY не задан в .env.local");
+    throw new AppError(ERROR_CODES.AI_CONFIG_ERROR);
   }
 
   return { apiKey, baseUrl };
@@ -21,25 +23,28 @@ function getOpenRouterConfig() {
 export async function chatCompletion(messages: ChatMessage[]) {
   const { apiKey, baseUrl } = getOpenRouterConfig();
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages,
-      temperature: 0.3,
-    }),
-    signal: AbortSignal.timeout(120000),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages,
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch {
+    throw new AppError(ERROR_CODES.AI_FAILED);
+  }
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Ошибка OpenRouter: HTTP ${response.status}${errorText ? ` — ${errorText}` : ""}`,
-    );
+    throw new AppError(ERROR_CODES.AI_FAILED);
   }
 
   const data = (await response.json()) as {
@@ -49,7 +54,7 @@ export async function chatCompletion(messages: ChatMessage[]) {
   const content = data.choices?.[0]?.message?.content?.trim();
 
   if (!content) {
-    throw new Error("OpenRouter вернул пустой ответ");
+    throw new AppError(ERROR_CODES.AI_FAILED);
   }
 
   return content;

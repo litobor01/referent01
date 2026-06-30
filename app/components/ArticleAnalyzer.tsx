@@ -1,11 +1,22 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import { FormEvent, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  ERROR_CODES,
+  getErrorMessage,
+  type ErrorCode,
+} from "@/lib/errors";
 import type { ParsedArticle } from "@/lib/parseArticle";
 import { isValidArticleUrl } from "@/lib/validateUrl";
 
 type Action = "summary" | "theses" | "telegram";
+
+type ApiErrorResponse = {
+  code?: ErrorCode;
+};
 
 const ACTION_LABELS: Record<Action, string> = {
   summary: "О чем статья?",
@@ -40,11 +51,14 @@ const PROCESS_LABELS: Record<Action, string> = {
   telegram: "Готовлю пост для Telegram…",
 };
 
-const ERROR_LABELS: Record<Action, string> = {
-  summary: "Не удалось проанализировать статью",
-  theses: "Не удалось сформировать тезисы",
-  telegram: "Не удалось подготовить пост",
-};
+async function readApiError(response: Response) {
+  try {
+    const data = (await response.json()) as ApiErrorResponse;
+    return data.code ?? ERROR_CODES.UNKNOWN;
+  } catch {
+    return ERROR_CODES.UNKNOWN;
+  }
+}
 
 export default function ArticleAnalyzer() {
   const [url, setUrl] = useState("");
@@ -52,16 +66,17 @@ export default function ArticleAnalyzer() {
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [processStatus, setProcessStatus] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<ErrorCode | null>(null);
   const [parsedCache, setParsedCache] = useState<{
     url: string;
     article: ParsedArticle;
   } | null>(null);
 
-  const urlIsValid = isValidArticleUrl(url);
+  const urlIsFilled = url.trim().length > 0;
 
   function handleUrlChange(value: string) {
     setUrl(value);
+    setErrorCode(null);
 
     if (value.trim() !== parsedCache?.url) {
       setParsedCache(null);
@@ -71,12 +86,17 @@ export default function ArticleAnalyzer() {
   async function handleAction(action: Action) {
     const trimmedUrl = url.trim();
 
-    if (!isValidArticleUrl(trimmedUrl)) {
-      setError("Введите корректный URL статьи (http:// или https://).");
+    if (!trimmedUrl) {
+      setErrorCode(ERROR_CODES.URL_REQUIRED);
       return;
     }
 
-    setError("");
+    if (!isValidArticleUrl(trimmedUrl)) {
+      setErrorCode(ERROR_CODES.URL_INVALID);
+      return;
+    }
+
+    setErrorCode(null);
     setActiveAction(action);
     setIsLoading(true);
     setResult("");
@@ -92,58 +112,62 @@ export default function ArticleAnalyzer() {
 
     try {
       if (!article) {
-        const parseResponse = await fetch("/api/parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: trimmedUrl }),
-        });
+        let parseResponse: Response;
 
-        const parseData = (await parseResponse.json()) as ParsedArticle & {
-          error?: string;
-        };
-
-        if (!parseResponse.ok) {
-          throw new Error(parseData.error ?? "Не удалось загрузить статью");
+        try {
+          parseResponse = await fetch("/api/parse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: trimmedUrl }),
+          });
+        } catch {
+          setErrorCode(ERROR_CODES.NETWORK_ERROR);
+          return;
         }
 
-        article = parseData;
+        if (!parseResponse.ok) {
+          setErrorCode(await readApiError(parseResponse));
+          return;
+        }
+
+        article = (await parseResponse.json()) as ParsedArticle;
         setParsedCache({ url: trimmedUrl, article });
       }
 
       setProcessStatus(PROCESS_LABELS[action]);
 
-      const response = await fetch("/api/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: trimmedUrl,
-          action,
-          article,
-        }),
-      });
+      let response: Response;
+
+      try {
+        response = await fetch("/api/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: trimmedUrl,
+            action,
+            article,
+          }),
+        });
+      } catch {
+        setErrorCode(ERROR_CODES.NETWORK_ERROR);
+        return;
+      }
+
+      if (!response.ok) {
+        setErrorCode(await readApiError(response));
+        return;
+      }
 
       const data = (await response.json()) as {
-        error?: string;
         result?: string;
         article?: ParsedArticle;
       };
-
-      if (!response.ok) {
-        throw new Error(data.error ?? ERROR_LABELS[action]);
-      }
 
       if (data.article) {
         setParsedCache({ url: trimmedUrl, article: data.article });
       }
 
       setResult(data.result ?? "");
-    } catch (actionError) {
-      setError(
-        actionError instanceof Error
-          ? actionError.message
-          : ERROR_LABELS[action],
-      );
-      setResult("");
     } finally {
       setIsLoading(false);
       setProcessStatus(null);
@@ -186,10 +210,12 @@ export default function ArticleAnalyzer() {
           </span>
         </label>
 
-        {error ? (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </p>
+        {errorCode ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Не получилось выполнить действие</AlertTitle>
+            <AlertDescription>{getErrorMessage(errorCode)}</AlertDescription>
+          </Alert>
         ) : null}
 
         <div className="flex flex-wrap gap-3">
@@ -198,7 +224,7 @@ export default function ArticleAnalyzer() {
               key={action}
               type="button"
               title={ACTION_TITLES[action]}
-              disabled={!urlIsValid || isLoading}
+              disabled={!urlIsFilled || isLoading}
               onClick={() => void handleAction(action)}
               className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed ${ACTION_STYLES[action]}`}
             >
