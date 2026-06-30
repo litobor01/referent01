@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "predev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/free-port-3000.ps1",
+    "clean": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/clean-next.ps1",
     "dev": "next dev",
+    "dev:clean": "pnpm clean && pnpm dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
