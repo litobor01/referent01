@@ -2,12 +2,13 @@
 
 import { FormEvent, useState } from "react";
 
-type Action = "summary" | "theses" | "telegram";
+type Action = "summary" | "theses" | "telegram" | "translate";
 
 const ACTION_LABELS: Record<Action, string> = {
   summary: "О чем статья?",
   theses: "Тезисы",
   telegram: "Пост для Telegram",
+  translate: "Перевод",
 };
 
 const ACTION_STYLES: Record<Action, string> = {
@@ -17,12 +18,22 @@ const ACTION_STYLES: Record<Action, string> = {
     "bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 focus-visible:ring-violet-300",
   telegram:
     "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 focus-visible:ring-emerald-300",
+  translate:
+    "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 focus-visible:ring-amber-300",
 };
 
 const ACTION_BADGE_STYLES: Record<Action, string> = {
   summary: "bg-sky-50 text-sky-700",
   theses: "bg-violet-50 text-violet-700",
   telegram: "bg-emerald-50 text-emerald-700",
+  translate: "bg-amber-50 text-amber-700",
+};
+
+const LOADING_LABELS: Record<Action, string> = {
+  summary: "Парсинг статьи...",
+  theses: "Парсинг статьи...",
+  telegram: "Парсинг статьи...",
+  translate: "Перевод статьи...",
 };
 
 type ParsedArticle = {
@@ -63,16 +74,31 @@ export default function ArticleAnalyzer() {
     setResult("");
 
     try {
-      const response = await fetch("/api/parse", {
+      const endpoint = action === "translate" ? "/api/translate" : "/api/parse";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmedUrl }),
       });
 
-      const data = (await response.json()) as ParsedArticle & { error?: string };
+      const data = (await response.json()) as ParsedArticle & {
+        error?: string;
+        formatted?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Не удалось распарсить статью");
+        throw new Error(
+          data.error ??
+            (action === "translate"
+              ? "Не удалось перевести статью"
+              : "Не удалось распарсить статью"),
+        );
+      }
+
+      if (action === "translate") {
+        setResult(data.formatted ?? "");
+        return;
       }
 
       const article: ParsedArticle = {
@@ -162,9 +188,11 @@ export default function ArticleAnalyzer() {
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
           {isLoading ? (
-            <p className="animate-pulse text-slate-500">Парсинг статьи...</p>
+            <p className="animate-pulse text-slate-500">
+              {activeAction ? LOADING_LABELS[activeAction] : "Загрузка..."}
+            </p>
           ) : result ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-6">
+            <pre className="overflow-x-auto whitespace-pre-wrap text-sm leading-7 text-slate-700">
               {result}
             </pre>
           ) : (
