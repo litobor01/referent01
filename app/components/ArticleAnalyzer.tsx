@@ -2,6 +2,9 @@
 
 import { FormEvent, useState } from "react";
 
+import type { ParsedArticle } from "@/lib/parseArticle";
+import { isValidArticleUrl } from "@/lib/validateUrl";
+
 type Action = "summary" | "theses" | "telegram" | "translate";
 
 const ACTION_LABELS: Record<Action, string> = {
@@ -43,28 +46,31 @@ const ERROR_LABELS: Record<Action, string> = {
   translate: "Не удалось перевести статью",
 };
 
-function isValidUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 export default function ArticleAnalyzer() {
   const [url, setUrl] = useState("");
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [parsedCache, setParsedCache] = useState<{
+    url: string;
+    article: ParsedArticle;
+  } | null>(null);
 
-  const urlIsValid = isValidUrl(url.trim());
+  const urlIsValid = isValidArticleUrl(url);
+
+  function handleUrlChange(value: string) {
+    setUrl(value);
+
+    if (value.trim() !== parsedCache?.url) {
+      setParsedCache(null);
+    }
+  }
 
   async function handleAction(action: Action) {
     const trimmedUrl = url.trim();
 
-    if (!isValidUrl(trimmedUrl)) {
+    if (!isValidArticleUrl(trimmedUrl)) {
       setError("Введите корректный URL статьи (http:// или https://).");
       return;
     }
@@ -74,40 +80,32 @@ export default function ArticleAnalyzer() {
     setIsLoading(true);
     setResult("");
 
+    const cachedArticle =
+      parsedCache?.url === trimmedUrl ? parsedCache.article : undefined;
+
     try {
-      if (action === "translate") {
-        const response = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: trimmedUrl }),
-        });
-
-        const data = (await response.json()) as {
-          error?: string;
-          formatted?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(data.error ?? ERROR_LABELS.translate);
-        }
-
-        setResult(data.formatted ?? "");
-        return;
-      }
-
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmedUrl, action }),
+        body: JSON.stringify({
+          url: trimmedUrl,
+          action,
+          article: cachedArticle,
+        }),
       });
 
       const data = (await response.json()) as {
         error?: string;
         result?: string;
+        article?: ParsedArticle;
       };
 
       if (!response.ok) {
         throw new Error(data.error ?? ERROR_LABELS[action]);
+      }
+
+      if (data.article) {
+        setParsedCache({ url: trimmedUrl, article: data.article });
       }
 
       setResult(data.result ?? "");
@@ -150,7 +148,7 @@ export default function ArticleAnalyzer() {
           <input
             type="url"
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => handleUrlChange(event.target.value)}
             placeholder="https://example.com/article"
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
           />

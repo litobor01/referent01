@@ -1,32 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { parseArticleFromUrl } from "@/lib/parseArticle";
+import { validateArticleUrl } from "@/lib/validateUrl";
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { url?: string };
-    const url = body.url?.trim();
+    const validation = validateArticleUrl(body.url ?? "");
 
-    if (!url) {
-      return NextResponse.json({ error: "URL обязателен" }, { status: 400 });
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    let parsedUrl: URL;
-
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return NextResponse.json({ error: "Некорректный URL" }, { status: 400 });
-    }
-
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return NextResponse.json(
-        { error: "Поддерживаются только http:// и https://" },
-        { status: 400 },
-      );
-    }
-
-    const article = await parseArticleFromUrl(parsedUrl.toString());
+    const article = await parseArticleFromUrl(validation.url.toString());
 
     return NextResponse.json(article);
   } catch (error) {
