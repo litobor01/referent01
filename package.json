@@ -7,6 +7,7 @@
     "clean": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/clean-next.ps1",
     "dev": "next dev",
     "dev:clean": "pnpm clean && pnpm dev",
+    "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify-step6.ps1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
