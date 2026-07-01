@@ -30,9 +30,9 @@ const ACTION_BADGE_STYLES: Record<Action, string> = {
 };
 
 const LOADING_LABELS: Record<Action, string> = {
-  summary: "Парсинг статьи...",
-  theses: "Парсинг статьи...",
-  telegram: "Парсинг статьи...",
+  summary: "Анализ статьи...",
+  theses: "Составление тезисов...",
+  telegram: "Подготовка поста...",
   illustration: "Генерация иллюстрации...",
 };
 
@@ -40,12 +40,6 @@ type IllustrationResult = {
   prompt: string;
   image: string;
   title: string | null;
-};
-
-type ParsedArticle = {
-  date: string | null;
-  title: string | null;
-  content: string | null;
 };
 
 function isValidUrl(value: string) {
@@ -107,32 +101,26 @@ export default function ArticleAnalyzer() {
         return;
       }
 
-      const response = await fetch("/api/parse", {
+      const response = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmedUrl }),
+        body: JSON.stringify({ url: trimmedUrl, action }),
       });
 
-      const data = (await response.json()) as ParsedArticle & { error?: string };
+      const data = (await response.json()) as { result?: string; error?: string };
 
       if (!response.ok) {
-        throw new Error(data.error ?? "Не удалось распарсить статью");
+        throw new Error(data.error ?? "Не удалось обработать статью");
       }
 
-      const article: ParsedArticle = {
-        date: data.date,
-        title: data.title,
-        content: data.content,
-      };
-
-      setResult(JSON.stringify(article, null, 2));
+      setResult(data.result ?? "");
     } catch (parseError) {
       setError(
         parseError instanceof Error
           ? parseError.message
           : action === "illustration"
             ? "Не удалось сгенерировать иллюстрацию"
-            : "Не удалось распарсить статью",
+            : "Не удалось обработать статью",
       );
       setResult("");
       setIllustration(null);
@@ -226,7 +214,7 @@ export default function ArticleAnalyzer() {
               />
               <div className="space-y-1">
                 <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                  Промпт для изображения
+                  Описание иллюстрации
                 </p>
                 <p className="text-sm leading-6 text-slate-700">
                   {illustration.prompt}
@@ -234,9 +222,9 @@ export default function ArticleAnalyzer() {
               </div>
             </div>
           ) : result ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-6">
+            <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
               {result}
-            </pre>
+            </div>
           ) : (
             <p className="text-slate-500">
               Результат появится здесь после выбора действия.

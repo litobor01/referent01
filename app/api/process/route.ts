@@ -1,16 +1,28 @@
 import { NextResponse } from "next/server";
 
-import { generateImage } from "@/lib/huggingface";
-import { createImagePromptFromArticle } from "@/lib/illustrationPrompt";
+import {
+  processArticleAction,
+  type TextAction,
+} from "@/lib/aiActions";
 import { parseArticleFromUrl } from "@/lib/parseArticle";
+
+const TEXT_ACTIONS: TextAction[] = ["summary", "theses", "telegram"];
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as {
+      url?: string;
+      action?: string;
+    };
     const url = body.url?.trim();
+    const action = body.action as TextAction;
 
     if (!url) {
       return NextResponse.json({ error: "URL обязателен" }, { status: 400 });
+    }
+
+    if (!TEXT_ACTIONS.includes(action)) {
+      return NextResponse.json({ error: "Неизвестное действие" }, { status: 400 });
     }
 
     let parsedUrl: URL;
@@ -29,24 +41,14 @@ export async function POST(request: Request) {
     }
 
     const article = await parseArticleFromUrl(parsedUrl.toString());
-    const { imagePrompt, descriptionRu, titleRu } =
-      await createImagePromptFromArticle(article);
-    const imageBuffer = await generateImage(imagePrompt);
-    const mimeType =
-      imageBuffer[0] === 0xff && imageBuffer[1] === 0xd8
-        ? "image/jpeg"
-        : "image/png";
+    const result = await processArticleAction(article, action);
 
-    return NextResponse.json({
-      prompt: descriptionRu,
-      image: `data:${mimeType};base64,${imageBuffer.toString("base64")}`,
-      title: titleRu,
-    });
+    return NextResponse.json({ result });
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : "Не удалось сгенерировать иллюстрацию";
+        : "Не удалось обработать статью";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

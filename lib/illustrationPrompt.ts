@@ -1,38 +1,56 @@
+import { buildArticleText } from "@/lib/articleText";
 import { createChatCompletion } from "@/lib/openrouter";
 import type { ParsedArticle } from "@/lib/parseArticle";
 
-function truncate(text: string, maxLength: number) {
-  if (text.length <= maxLength) {
-    return text;
+export type IllustrationPromptResult = {
+  imagePrompt: string;
+  descriptionRu: string;
+  titleRu: string;
+};
+
+function parseIllustrationResponse(raw: string): IllustrationPromptResult {
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
+  if (!jsonMatch) {
+    throw new Error("Не удалось разобрать ответ модели для иллюстрации");
   }
 
-  return `${text.slice(0, maxLength)}…`;
-}
+  const parsed = JSON.parse(jsonMatch[0]) as {
+    imagePrompt?: string;
+    descriptionRu?: string;
+    titleRu?: string;
+  };
 
-function buildArticleText(article: ParsedArticle) {
-  const parts = [
-    article.title ? `Title: ${article.title}` : "",
-    article.date ? `Date: ${article.date}` : "",
-    article.content ? `Content:\n${truncate(article.content, 6000)}` : "",
-  ].filter(Boolean);
+  if (!parsed.imagePrompt?.trim() || !parsed.descriptionRu?.trim()) {
+    throw new Error("Модель вернула неполный ответ для иллюстрации");
+  }
 
-  return parts.join("\n\n");
+  return {
+    imagePrompt: parsed.imagePrompt.trim(),
+    descriptionRu: parsed.descriptionRu.trim(),
+    titleRu: parsed.titleRu?.trim() || "Иллюстрация к статье",
+  };
 }
 
 export async function createImagePromptFromArticle(
   article: ParsedArticle,
-): Promise<string> {
+): Promise<IllustrationPromptResult> {
   const articleText = buildArticleText(article);
 
-  return createChatCompletion([
-    {
-      role: "system",
-      content:
-        "You create prompts for text-to-image AI models. Based on an English article, write ONE vivid scene description in English that visually represents the article's main theme. The prompt should be concrete, visual, and suitable for illustration. Do not include text, logos, or watermarks in the image. Reply with ONLY the prompt, without quotes or explanation.",
-    },
-    {
-      role: "user",
-      content: articleText || "No article content available.",
-    },
-  ]);
+  const raw = await createChatCompletion(
+    [
+      {
+        role: "system",
+        content:
+          'На основе англоязычной статьи подготовь данные для иллюстрации. Верни ТОЛЬКО JSON без markdown: {"imagePrompt":"яркое описание сцены на английском для text-to-image модели, без текста и логотипов на изображении","descriptionRu":"краткое описание иллюстрации на русском для пользователя","titleRu":"заголовок статьи на русском"}',
+      },
+      {
+        role: "user",
+        content: articleText || "Содержимое статьи недоступно.",
+      },
+    ],
+    { maxTokens: 400 },
+  );
+
+  return parseIllustrationResponse(raw);
 }
