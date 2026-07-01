@@ -2,12 +2,13 @@
 
 import { FormEvent, useState } from "react";
 
-type Action = "summary" | "theses" | "telegram";
+type Action = "summary" | "theses" | "telegram" | "illustration";
 
 const ACTION_LABELS: Record<Action, string> = {
   summary: "О чем статья?",
   theses: "Тезисы",
   telegram: "Пост для Telegram",
+  illustration: "Иллюстрация",
 };
 
 const ACTION_STYLES: Record<Action, string> = {
@@ -17,12 +18,28 @@ const ACTION_STYLES: Record<Action, string> = {
     "bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 focus-visible:ring-violet-300",
   telegram:
     "bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 focus-visible:ring-emerald-300",
+  illustration:
+    "bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 focus-visible:ring-amber-300",
 };
 
 const ACTION_BADGE_STYLES: Record<Action, string> = {
   summary: "bg-sky-50 text-sky-700",
   theses: "bg-violet-50 text-violet-700",
   telegram: "bg-emerald-50 text-emerald-700",
+  illustration: "bg-amber-50 text-amber-700",
+};
+
+const LOADING_LABELS: Record<Action, string> = {
+  summary: "Парсинг статьи...",
+  theses: "Парсинг статьи...",
+  telegram: "Парсинг статьи...",
+  illustration: "Генерация иллюстрации...",
+};
+
+type IllustrationResult = {
+  prompt: string;
+  image: string;
+  title: string | null;
 };
 
 type ParsedArticle = {
@@ -44,6 +61,9 @@ export default function ArticleAnalyzer() {
   const [url, setUrl] = useState("");
   const [activeAction, setActiveAction] = useState<Action | null>(null);
   const [result, setResult] = useState("");
+  const [illustration, setIllustration] = useState<IllustrationResult | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -61,8 +81,32 @@ export default function ArticleAnalyzer() {
     setActiveAction(action);
     setIsLoading(true);
     setResult("");
+    setIllustration(null);
 
     try {
+      if (action === "illustration") {
+        const response = await fetch("/api/illustration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: trimmedUrl }),
+        });
+
+        const data = (await response.json()) as IllustrationResult & {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Не удалось сгенерировать иллюстрацию");
+        }
+
+        setIllustration({
+          prompt: data.prompt,
+          image: data.image,
+          title: data.title,
+        });
+        return;
+      }
+
       const response = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,9 +130,12 @@ export default function ArticleAnalyzer() {
       setError(
         parseError instanceof Error
           ? parseError.message
-          : "Не удалось распарсить статью",
+          : action === "illustration"
+            ? "Не удалось сгенерировать иллюстрацию"
+            : "Не удалось распарсить статью",
       );
       setResult("");
+      setIllustration(null);
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +209,30 @@ export default function ArticleAnalyzer() {
 
         <div className="min-h-40 rounded-xl bg-slate-50 p-4 text-slate-700">
           {isLoading ? (
-            <p className="animate-pulse text-slate-500">Парсинг статьи...</p>
+            <p className="animate-pulse text-slate-500">
+              {activeAction ? LOADING_LABELS[activeAction] : "Загрузка..."}
+            </p>
+          ) : illustration && activeAction === "illustration" ? (
+            <div className="space-y-4">
+              {illustration.title ? (
+                <p className="text-sm font-medium text-slate-900">
+                  {illustration.title}
+                </p>
+              ) : null}
+              <img
+                src={illustration.image}
+                alt={illustration.prompt}
+                className="max-h-[480px] w-full rounded-lg object-contain"
+              />
+              <div className="space-y-1">
+                <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                  Промпт для изображения
+                </p>
+                <p className="text-sm leading-6 text-slate-700">
+                  {illustration.prompt}
+                </p>
+              </div>
+            </div>
           ) : result ? (
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-6">
               {result}
